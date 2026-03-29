@@ -185,34 +185,64 @@
             <!-- Lista -->
             <div v-else class="space-y-3 overflow-y-auto pr-1 pb-4 custom-scrollbar max-h-80">
                 <div v-for="expense in sortedExpenses" :key="expense.id"
-                    class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-all hover:shadow-md group">
+                    @click="toggleExpenseDetails(expense.id)"
+                    class="bg-white rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md group cursor-pointer overflow-hidden">
 
-                    <div class="flex items-center flex-1 min-w-0">
-                        <!-- Icono Categoría -->
-                        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mr-3 flex-shrink-0"
-                            :style="{ backgroundColor: expense.category.bgColor }">
-                            <span>{{ expense.category.icon }}</span>
+                    <!-- Resumen visible siempre -->
+                    <div class="p-4 flex items-center justify-between">
+                        <div class="flex items-center flex-1 min-w-0">
+                            <!-- Icono Categoría -->
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mr-3 flex-shrink-0"
+                                :style="{ backgroundColor: expense.category.bgColor }">
+                                <span>{{ expense.category.icon }}</span>
+                            </div>
+
+                            <!-- Detalles Gasto -->
+                            <div class="truncate pr-3">
+                                <h3 class="font-bold text-gray-800 text-base truncate">{{ expense.detail }}</h3>
+                                <p class="text-xs text-gray-500 font-medium">
+                                    {{ expense.category.name }}
+                                </p>
+                            </div>
                         </div>
 
-                        <!-- Detalles Gasto -->
-                        <div class="truncate pr-3">
-                            <h3 class="font-bold text-gray-800 text-base truncate">{{ expense.detail }}</h3>
-                            <p class="text-xs text-gray-500 font-medium">
-                                {{ expense.category.name }} <span class="mx-1">•</span> {{ formatDate(expense.date) }}
-                            </p>
+                        <!-- Monto y flecha -->
+                        <div class="flex flex-col items-end flex-shrink-0 gap-1 lg:flex-row lg:items-center lg:gap-3">
+                            <span class="font-bold text-gray-800 text-lg">${{ expense.amount.toFixed(2) }}</span>
+                            <i class="fa-solid text-gray-400 text-sm transition-transform duration-300"
+                                :class="expandedExpenseId === expense.id ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                         </div>
                     </div>
 
-                    <!-- Monto y Acciones -->
-                    <div class="flex flex-col items-end flex-shrink-0 gap-1 lg:flex-row lg:items-center lg:gap-3">
-                        <span class="font-bold text-gray-800 text-lg">${{ expense.amount.toFixed(2) }}</span>
+                    <!-- Detalle Expandido -->
+                    <div v-if="expandedExpenseId === expense.id"
+                        class="px-4 pb-4 pt-2 border-t border-gray-50 bg-gray-50/50">
+                        <div class="space-y-2 mb-4 mt-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 font-medium">Categoría:</span>
+                                <span class="text-gray-800 font-semibold">{{ expense.category.name }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 font-medium">Detalle:</span>
+                                <span class="text-gray-800 font-semibold text-right break-words max-w-[60%]">{{ expense.detail }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 font-medium">Fecha y Hora:</span>
+                                <span class="text-gray-800 font-semibold">{{ formatDateFull(expense.date) }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-2 pt-2 border-t border-gray-200">
+                                <span class="text-gray-700 font-bold">Monto Exacto:</span>
+                                <span class="text-blue-600 font-bold text-base">${{ expense.amount.toFixed(2) }}</span>
+                            </div>
+                        </div>
 
-                        <!-- Botón Eliminar (Visible en móviles siempre, en desktop al hover si se desea, pero dejaremos visible por ser mobile first) -->
-                        <button @click="deleteExpense(expense.id)"
-                            class="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors shadow-sm"
-                            aria-label="Eliminar gasto">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
-                        </button>
+                        <!-- Botón Eliminar -->
+                        <div class="flex justify-end">
+                            <button @click.stop="deleteExpense(expense.id)"
+                                class="px-4 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center gap-2 transition-colors text-sm font-bold shadow-sm w-full">
+                                <i class="fa-solid fa-trash-can"></i> Eliminar Registro
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -232,6 +262,7 @@
                 const tempBudget = ref(0);
 
                 const expenses = ref([]);
+                const expandedExpenseId = ref(null);
 
                 // Definición de categorías con colores pastel para el UI
                 const categories = [
@@ -345,7 +376,16 @@
                     }
                 };
 
-                // Formateo de fecha: ej. 24/10 14:30
+                // Alternar detalles del gasto
+                const toggleExpenseDetails = (id) => {
+                    if (expandedExpenseId.value === id) {
+                        expandedExpenseId.value = null; // Cierra si ya estaba abierto
+                    } else {
+                        expandedExpenseId.value = id; // Abre el nuevo
+                    }
+                };
+
+                // Formateo de fecha corto: ej. 24/10 14:30
                 const formatDate = (timestamp) => {
                     const d = new Date(timestamp);
                     const day = d.getDate().toString().padStart(2, '0');
@@ -353,6 +393,17 @@
                     const hours = d.getHours().toString().padStart(2, '0');
                     const minutes = d.getMinutes().toString().padStart(2, '0');
                     return `${day}/${month} ${hours}:${minutes}`;
+                };
+
+                // Formateo de fecha completo para los detalles
+                const formatDateFull = (timestamp) => {
+                    const d = new Date(timestamp);
+                    const day = d.getDate().toString().padStart(2, '0');
+                    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                    const year = d.getFullYear();
+                    const hours = d.getHours().toString().padStart(2, '0');
+                    const minutes = d.getMinutes().toString().padStart(2, '0');
+                    return `${day}/${month}/${year} a las ${hours}:${minutes}`;
                 };
 
                 // Ciclo de vida
@@ -365,6 +416,7 @@
                     isEditingBudget,
                     tempBudget,
                     expenses,
+                    expandedExpenseId,
                     categories,
                     newExpense,
                     totalSpent,
@@ -376,7 +428,9 @@
                     cancelEditingBudget,
                     addExpense,
                     deleteExpense,
-                    formatDate
+                    toggleExpenseDetails,
+                    formatDate,
+                    formatDateFull
                 };
             }
         }).mount('#app');
