@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Gastos de Viaje</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 Composition API -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- FontAwesome para Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #e5e7eb;
+            /* Fondo de la página principal para resaltar el "celular" */
+        }
+
+        /* Custom scrollbar para la lista de gastos */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 5px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Contenedor principal simulando móvil: max-w-md centra el contenido en pantallas grandes y se adapta en pequeñas -->
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-gray-50 shadow-2xl flex flex-col relative font-sans">
+
+        <!-- Header y Configuración de Presupuesto -->
+        <header
+            class="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-6 rounded-b-3xl shadow-lg relative overflow-hidden">
+            <!-- Patrón de fondo opcional -->
+            <div class="absolute top-0 right-0 opacity-10 transform translate-x-1/2 -translate-y-1/2">
+                <i class="fa-solid fa-plane text-9xl"></i>
+            </div>
+
+            <h1 class="text-2xl font-bold text-center mb-5 relative z-10">
+                <i class="fa-solid fa-wallet mr-2"></i> Mis Gastos de Viaje
+            </h1>
+
+            <div class="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 relative z-10">
+                <p class="text-sm text-blue-100 font-medium mb-1">Presupuesto Total</p>
+                <div v-if="!isEditingBudget" class="flex items-center justify-between">
+                    <span class="text-3xl font-bold tracking-tight">${{ budget.toFixed(2) }}</span>
+                    <button @click="startEditingBudget"
+                        class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition shadow-sm"
+                        aria-label="Editar presupuesto">
+                        <i class="fa-solid fa-pen text-sm"></i>
+                    </button>
+                </div>
+                <div v-else class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <span
+                            class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">$</span>
+                        <input type="number" v-model.number="tempBudget" min="0" step="0.01"
+                            class="w-full bg-white text-gray-900 py-2 pl-7 pr-3 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            placeholder="0.00">
+                    </div>
+                    <button @click="saveBudget"
+                        class="w-10 h-10 rounded-xl bg-green-500 hover:bg-green-600 flex items-center justify-center shadow-md transition text-white">
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                    <button @click="cancelEditingBudget"
+                        class="w-10 h-10 rounded-xl bg-red-400 hover:bg-red-500 flex items-center justify-center shadow-md transition text-white">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard: Totales y Saldo -->
+        <div class="px-5 pt-6 pb-2">
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Tarjeta Total Gastado -->
+                <div
+                    class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center items-center relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-12 h-12 bg-red-50 rounded-bl-full z-0"></div>
+                    <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1 z-10">Total
+                        Gastado</span>
+                    <span class="text-2xl font-bold text-gray-800 z-10">${{ totalSpent.toFixed(2) }}</span>
+                </div>
+
+                <!-- Tarjeta Saldo Disponible -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-center items-center relative overflow-hidden transition-colors"
+                    :class="{'border-red-300 bg-red-50/50': isBalanceNegative}">
+                    <div class="absolute top-0 right-0 w-12 h-12 rounded-bl-full z-0 transition-colors"
+                        :class="isBalanceNegative ? 'bg-red-100' : 'bg-green-50'"></div>
+                    <span class="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1 z-10">Saldo</span>
+                    <span class="text-2xl font-bold z-10 transition-colors"
+                        :class="isBalanceNegative ? 'text-red-600' : 'text-green-600'">
+                        ${{ availableBalance.toFixed(2) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario Rápido de Gastos -->
+        <div class="px-5 py-4">
+            <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider mb-3 ml-1">Nuevo Gasto</h2>
+            <form @submit.prevent="addExpense"
+                class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 space-y-4">
+
+                <!-- Categoría -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1.5 ml-1">Categoría</label>
+                    <div class="relative">
+                        <select v-model="newExpense.category" required
+                            class="w-full bg-gray-50 border border-gray-200 text-gray-800 py-3 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none text-base font-medium">
+                            <option value="" disabled>Selecciona una categoría...</option>
+                            <option v-for="cat in categories" :key="cat.id" :value="cat">
+                                {{ cat.icon }} {{ cat.name }}
+                            </option>
+                        </select>
+                        <div
+                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                            <i class="fa-solid fa-chevron-down text-sm"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Monto -->
+                    <div class="col-span-2 sm:col-span-1">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5 ml-1">Monto</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span class="text-gray-500 font-bold">$</span>
+                            </div>
+                            <input type="number" step="0.01" min="0.01" v-model.number="newExpense.amount" required
+                                class="w-full bg-gray-50 border border-gray-200 text-gray-800 py-3 pl-8 pr-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-medium"
+                                placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <!-- Detalle -->
+                    <div class="col-span-2 sm:col-span-1">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5 ml-1">Detalle</label>
+                        <input type="text" v-model="newExpense.detail" required
+                            class="w-full bg-gray-50 border border-gray-200 text-gray-800 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-base font-medium"
+                            placeholder="Ej: Almuerzo">
+                    </div>
+                </div>
+
+                <!-- Botón de Envío Gigante -->
+                <button type="submit"
+                    class="w-full mt-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 px-4 rounded-xl shadow-md shadow-blue-200 transform transition active:scale-[0.98] text-lg flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-plus-circle text-xl"></i> Agregar Gasto
+                </button>
+            </form>
+        </div>
+
+        <!-- Historial de Movimientos -->
+        <div class="px-5 pb-8 flex-grow flex flex-col min-h-0">
+            <div class="flex items-center justify-between mb-3 ml-1 mt-2">
+                <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Historial</h2>
+                <span class="text-xs font-semibold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">{{ expenses.length
+                    }}</span>
+            </div>
+
+            <!-- Estado vacío -->
+            <div v-if="expenses.length === 0"
+                class="flex-grow flex flex-col items-center justify-center p-8 bg-white/50 rounded-3xl border-2 border-dashed border-gray-200 text-center relative z-0">
+                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                    <i class="fa-solid fa-receipt text-2xl text-gray-400"></i>
+                </div>
+                <h3 class="text-gray-700 font-bold mb-1">Sin gastos aún</h3>
+                <p class="text-sm text-gray-500">Registra tu primer gasto en el formulario superior.</p>
+            </div>
+
+            <!-- Lista -->
+            <div v-else class="space-y-3 overflow-y-auto pr-1 pb-4 custom-scrollbar max-h-80">
+                <div v-for="expense in sortedExpenses" :key="expense.id"
+                    class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between transition-all hover:shadow-md group">
+
+                    <div class="flex items-center flex-1 min-w-0">
+                        <!-- Icono Categoría -->
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl mr-3 flex-shrink-0"
+                            :style="{ backgroundColor: expense.category.bgColor }">
+                            <span>{{ expense.category.icon }}</span>
+                        </div>
+
+                        <!-- Detalles Gasto -->
+                        <div class="truncate pr-3">
+                            <h3 class="font-bold text-gray-800 text-base truncate">{{ expense.detail }}</h3>
+                            <p class="text-xs text-gray-500 font-medium">
+                                {{ expense.category.name }} <span class="mx-1">•</span> {{ formatDate(expense.date) }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Monto y Acciones -->
+                    <div class="flex flex-col items-end flex-shrink-0 gap-1 lg:flex-row lg:items-center lg:gap-3">
+                        <span class="font-bold text-gray-800 text-lg">${{ expense.amount.toFixed(2) }}</span>
+
+                        <!-- Botón Eliminar (Visible en móviles siempre, en desktop al hover si se desea, pero dejaremos visible por ser mobile first) -->
+                        <button @click="deleteExpense(expense.id)"
+                            class="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors shadow-sm"
+                            aria-label="Eliminar gasto">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Lógica de Vue 3 -->
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // Estado
+                const budget = ref(0);
+                const isEditingBudget = ref(false);
+                const tempBudget = ref(0);
+
+                const expenses = ref([]);
+
+                // Definición de categorías con colores pastel para el UI
+                const categories = [
+                    { id: 'vuelos', name: 'Vuelos/Tickets', icon: '✈️', bgColor: '#cffafe' },      // Cyan 100
+                    { id: 'hotel', name: 'Hotel/Hospedaje', icon: '🏨', bgColor: '#e0e7ff' },      // Indigo 100
+                    { id: 'comida', name: 'Comidas/Restaurantes', icon: '🍽️', bgColor: '#ffedd5' }, // Orange 100
+                    { id: 'snacks', name: 'Café/Snacks/Bebidas', icon: '☕', bgColor: '#fef3c7' },  // Amber 100
+                    { id: 'transporte', name: 'Transporte Local', icon: '🚕', bgColor: '#fef9c3' }, // Yellow 100
+                    { id: 'atracciones', name: 'Tours/Atracciones', icon: '🎟️', bgColor: '#dcfce3' }, // Green 100
+                    { id: 'compras', name: 'Ropa/Compras', icon: '🛍️', bgColor: '#fae8ff' },       // Fuchsia 100
+                    { id: 'souvenirs', name: 'Souvenirs/Regalos', icon: '🎁', bgColor: '#fce7f3' },  // Pink 100
+                    { id: 'salud', name: 'Farmacia/Salud', icon: '⚕️', bgColor: '#fee2e2' },       // Red 100
+                    { id: 'internet', name: 'Internet/SIM', icon: '📱', bgColor: '#dbeafe' },      // Blue 100
+                    { id: 'lavanderia', name: 'Lavandería/Tintorería', icon: '👕', bgColor: '#ecfdf5' }, // Emerald 100
+                    { id: 'propinas', name: 'Propinas/Tips', icon: '💵', bgColor: '#fef08a' },     // Yellow 200
+                    { id: 'otros', name: 'Otros Imprevistos', icon: '💡', bgColor: '#f3f4f6' }     // Gray 100
+                ];
+
+                const newExpense = ref({
+                    category: '',
+                    amount: null,
+                    detail: ''
+                });
+
+                // Computados
+                const totalSpent = computed(() => {
+                    return expenses.value.reduce((acc, curr) => acc + curr.amount, 0);
+                });
+
+                const availableBalance = computed(() => {
+                    return budget.value - totalSpent.value;
+                });
+
+                const isBalanceNegative = computed(() => {
+                    return availableBalance.value < 0;
+                });
+
+                const sortedExpenses = computed(() => {
+                    return [...expenses.value].sort((a, b) => b.date - a.date);
+                });
+
+                // Métodos
+                const loadData = () => {
+                    const savedBudget = localStorage.getItem('travelApp_budget');
+                    if (savedBudget) {
+                        budget.value = parseFloat(savedBudget);
+                    }
+
+                    const savedExpenses = localStorage.getItem('travelApp_expenses');
+                    if (savedExpenses) {
+                        try {
+                            expenses.value = JSON.parse(savedExpenses);
+                        } catch (e) {
+                            console.error("Error al cargar los gastos:", e);
+                            expenses.value = [];
+                        }
+                    }
+                };
+
+                const saveData = () => {
+                    localStorage.setItem('travelApp_budget', budget.value.toString());
+                    localStorage.setItem('travelApp_expenses', JSON.stringify(expenses.value));
+                };
+
+                // Observador para autoguardado en LocalStorage
+                watch([budget, expenses], () => {
+                    saveData();
+                }, { deep: true });
+
+                const startEditingBudget = () => {
+                    tempBudget.value = budget.value;
+                    isEditingBudget.value = true;
+                };
+
+                const saveBudget = () => {
+                    if (tempBudget.value >= 0) {
+                        budget.value = tempBudget.value;
+                    }
+                    isEditingBudget.value = false;
+                };
+
+                const cancelEditingBudget = () => {
+                    isEditingBudget.value = false;
+                };
+
+                const addExpense = () => {
+                    // Validaciones básicas (cubiertas en parte por required en HTML)
+                    if (!newExpense.value.category || !newExpense.value.amount || !newExpense.value.detail) {
+                        return;
+                    }
+
+                    expenses.value.push({
+                        id: Date.now().toString(),
+                        category: newExpense.value.category,
+                        amount: parseFloat(newExpense.value.amount),
+                        detail: newExpense.value.detail,
+                        date: Date.now()
+                    });
+
+                    // Limpiar formulario tras guardar
+                    newExpense.value = {
+                        category: '',
+                        amount: null,
+                        detail: ''
+                    };
+                };
+
+                const deleteExpense = (id) => {
+                    if (confirm("¿Seguro que deseas eliminar este gasto?")) {
+                        expenses.value = expenses.value.filter(e => e.id !== id);
+                    }
+                };
+
+                // Formateo de fecha: ej. 24/10 14:30
+                const formatDate = (timestamp) => {
+                    const d = new Date(timestamp);
+                    const day = d.getDate().toString().padStart(2, '0');
+                    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                    const hours = d.getHours().toString().padStart(2, '0');
+                    const minutes = d.getMinutes().toString().padStart(2, '0');
+                    return `${day}/${month} ${hours}:${minutes}`;
+                };
+
+                // Ciclo de vida
+                onMounted(() => {
+                    loadData();
+                });
+
+                return {
+                    budget,
+                    isEditingBudget,
+                    tempBudget,
+                    expenses,
+                    categories,
+                    newExpense,
+                    totalSpent,
+                    availableBalance,
+                    isBalanceNegative,
+                    sortedExpenses,
+                    startEditingBudget,
+                    saveBudget,
+                    cancelEditingBudget,
+                    addExpense,
+                    deleteExpense,
+                    formatDate
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
